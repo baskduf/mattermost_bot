@@ -34,7 +34,7 @@ pip install -r requirements.txt
 
 ```env
 # Mattermost 토큰
-MATTERMOST_TOKEN=nptcwj16efyddc1xct6s5ckq7a
+MATTERMOST_TOKEN=your_mattermost_token_here
 
 # OpenWeatherMap API 키 (날씨 기능용)
 WEATHER_API_KEY=your_openweathermap_api_key
