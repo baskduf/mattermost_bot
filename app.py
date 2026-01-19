@@ -37,15 +37,27 @@ def send_mattermost_response(response_url, text):
 @app.route('/webhook', methods=['POST'])
 def webhook():
     """메인 웹훅 엔드포인트"""
+    print("=" * 50)
+    print("Webhook received!")
+    print(f"Request method: {request.method}")
+    print(f"Request headers: {dict(request.headers)}")
+    print(f"Request form data: {request.form.to_dict()}")
+    print("=" * 50)
+
     data = request.form.to_dict()
 
     # 토큰 검증
     token = data.get('token', '')
+    print(f"Received token: {token}")
+    print(f"Expected token: {MATTERMOST_TOKEN}")
     if token != MATTERMOST_TOKEN:
+        print("Token validation failed!")
         return jsonify({"error": "Invalid token"}), 403
 
     text = data.get('text', '').strip()
     command = text.split()[0] if text else ''
+    print(f"Received text: {text}")
+    print(f"Parsed command: {command}")
 
     # 트리거 단어 확인
     if command == '!날씨':
