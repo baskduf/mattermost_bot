@@ -10,10 +10,10 @@ load_dotenv()
 app = Flask(__name__)
 
 # Mattermost 설정
-MATTERMOST_TOKEN = os.getenv('MATTERMOST_TOKEN', 'nptcwj16efyddc1xct6s5ckq7a')
+MATTERMOST_TOKEN = os.getenv('MATTERMOST_TOKEN')
 WEATHER_API_KEY = os.getenv('WEATHER_API_KEY', '')  # OpenWeatherMap API 키
 GIPHY_API_KEY = os.getenv('GIPHY_API_KEY', '')  # Giphy API 키
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'AIzaSyBFbRNnt6xNdWvV6RGrra5RdLt15N3byNw')  # Gemini API 키
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')  # Gemini API 키
 
 # Gemini AI 설정
 if GEMINI_API_KEY:
@@ -310,4 +310,8 @@ def health():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # Get port from environment variable (Elastic Beanstalk uses 8080)
+    port = int(os.getenv('PORT', 5000))
+    # Disable debug in production
+    debug = os.getenv('FLASK_ENV', 'production') != 'production'
+    app.run(host='0.0.0.0', port=port, debug=debug)
