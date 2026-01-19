@@ -3,6 +3,7 @@ import requests
 import random
 import os
 from dotenv import load_dotenv
+import google.generativeai as genai
 
 load_dotenv()
 
@@ -12,6 +13,12 @@ app = Flask(__name__)
 MATTERMOST_TOKEN = os.getenv('MATTERMOST_TOKEN', 'nptcwj16efyddc1xct6s5ckq7a')
 WEATHER_API_KEY = os.getenv('WEATHER_API_KEY', '')  # OpenWeatherMap API 키
 GIPHY_API_KEY = os.getenv('GIPHY_API_KEY', '')  # Giphy API 키
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'AIzaSyBFbRNnt6xNdWvV6RGrra5RdLt15N3byNw')  # Gemini API 키
+
+# Gemini AI 설정
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    gemini_model = genai.GenerativeModel('gemini-pro')
 
 # 점심 메뉴 리스트
 LUNCH_MENU = [
@@ -70,6 +77,9 @@ def webhook():
         return handle_dice(data)
     elif command == '!gif':
         return handle_gif(data)
+    elif text.startswith('!'):
+        # ! 로 시작하는 질문은 Gemini AI로 처리
+        return handle_gemini(data)
     elif command == '!help':
         return handle_help(data)
 
@@ -228,6 +238,42 @@ def handle_gif(data):
         }), 200
 
 
+def handle_gemini(data):
+    """Gemini AI를 사용한 질문 응답"""
+    text = data.get('text', '').strip()
+
+    # ! 제거하고 질문 추출
+    question = text[1:].strip() if text.startswith('!') else text
+
+    if not question:
+        return jsonify({
+            "text": "사용법: !질문내용\n예시: !파이썬에서 리스트와 튜플의 차이는?"
+        }), 200
+
+    if not GEMINI_API_KEY:
+        return jsonify({
+            "text": "Gemini API 키가 설정되지 않았습니다."
+        }), 200
+
+    try:
+        # Gemini AI에 질문 전송
+        response = gemini_model.generate_content(question)
+
+        if response.text:
+            return jsonify({
+                "text": f"🤖 **Gemini AI**\n\n{response.text}",
+                "response_type": "in_channel"
+            }), 200
+        else:
+            return jsonify({
+                "text": "답변을 생성할 수 없습니다."
+            }), 200
+    except Exception as e:
+        return jsonify({
+            "text": f"오류가 발생했습니다: {str(e)}"
+        }), 200
+
+
 def handle_help(data):
     """도움말"""
     help_text = """
@@ -239,6 +285,7 @@ def handle_help(data):
 - `!점심` - 점심 메뉴 랜덤 추천
 - `!주사위 [면 수]` - 주사위 굴리기 (기본 6면)
 - `!gif [검색어]` - GIF 검색
+- `![질문내용]` - Gemini AI에게 질문하기
 - `!help` - 이 도움말 보기
 
 **예시:**
@@ -247,6 +294,7 @@ def handle_help(data):
 - `!점심`
 - `!주사위 20`
 - `!gif 고양이`
+- `!파이썬에서 리스트와 튜플의 차이는?`
 """
     return jsonify({
         "text": help_text,

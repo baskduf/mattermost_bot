@@ -11,6 +11,7 @@ Mattermost의 Outgoing Webhook을 사용한 Flask 기반 봇 애플리케이션�
 - **!점심** - 랜덤 점심 메뉴 추천
 - **!주사위 [면 수]** - 주사위 굴리기 (기본 6면)
 - **!gif [검색어]** - GIF 이미지 검색
+- **![질문내용]** - Gemini AI에게 질문하기
 - **!help** - 도움말 표시
 
 ## 설치 방법
@@ -40,6 +41,9 @@ WEATHER_API_KEY=your_openweathermap_api_key
 
 # Giphy API 키 (GIF 검색용)
 GIPHY_API_KEY=your_giphy_api_key
+
+# Google Gemini API 키 (AI 챗봇용)
+GEMINI_API_KEY=your_gemini_api_key
 ```
 
 #### API 키 발급 방법
@@ -53,6 +57,12 @@ GIPHY_API_KEY=your_giphy_api_key
 1. [Giphy Developers](https://developers.giphy.com/) 접속
 2. 앱 생성 후 API 키 발급
 3. `.env` 파일의 `GIPHY_API_KEY`에 입력
+
+**Google Gemini API**
+1. [Google AI Studio](https://makersuite.google.com/app/apikey) 접속
+2. Google 계정으로 로그인
+3. "Get API key" 버튼 클릭하여 API 키 생성
+4. `.env` 파일의 `GEMINI_API_KEY`에 입력
 
 ### 4. 애플리케이션 실행
 
@@ -95,6 +105,7 @@ Mattermost 채널에서 다음과 같이 명령어를 입력합니다:
 !점심
 !주사위 20
 !gif 고양이
+!파이썬에서 리스트와 튜플의 차이는?
 !help
 ```
 
@@ -122,11 +133,15 @@ mattermost_bot/
 3. 콜백 URL이 정확한지 확인
 4. 트리거 단어가 정확히 일치하는지 확인
 
-### 날씨/GIF 기능이 작동하지 않는 경우
+### 날씨/GIF/Gemini 기능이 작동하지 않는 경우
 
 1. `.env` 파일에 API 키가 올바르게 설정되었는지 확인
 2. API 키의 유효성 확인
 3. 인터넷 연결 상태 확인
+
+### Gemini AI 응답이 느린 경우
+
+Gemini AI는 외부 API를 호출하므로 응답 시간이 몇 초 소요될 수 있습니다. 이는 정상적인 동작입니다.
 
 ## 라이선스
 
