@@ -18,9 +18,9 @@ MATTERMOST_INCOMING_WEBHOOK = "https://meeting.ssafy.com/hooks/7d17ys3estg89piuh
 # Gemini AI 설정
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    # 비용 절감: gemini-2.0-flash-lite 사용 (가장 저렴한 모델)
+    # 무료 티어에서 가장 많이 사용 가능한 모델
     gemini_model = genai.GenerativeModel(
-        'gemini-2.0-flash-lite',
+        'gemini-2.5-flash-lite',
         generation_config={
             'max_output_tokens': 500,  # 응답 길이 제한
             'temperature': 0.7,
