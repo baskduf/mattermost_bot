@@ -1,0 +1,29 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+    commands:
+      - echo "Installing dependencies..."
+      - pip install -r requirements.txt
+
+  pre_build:
+    commands:
+      - echo "Running pre-build checks..."
+      - python --version
+      - pip --version
+
+  build:
+    commands:
+      - echo "Build phase - no compilation needed for Python"
+      - echo "Creating application archive..."
+
+  post_build:
+    commands:
+      - echo "Build completed on `date`"
+
+artifacts:
+  files:
+    - '**/*'
+  name: mattermost-bot-$(date +%Y%m%d-%H%M%S)
