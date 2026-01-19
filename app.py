@@ -18,7 +18,8 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'AIzaSyBFbRNnt6xNdWvV6RGrra5RdLt15N
 # Gemini AI 설정
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+    # 최신 Gemini 모델 사용
+    gemini_model = genai.GenerativeModel('models/gemini-2.5-flash')
 
 # 점심 메뉴 리스트
 LUNCH_MENU = [
