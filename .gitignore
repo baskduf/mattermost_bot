@@ -42,3 +42,16 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Elastic Beanstalk
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
+
+# Claude
+.claude/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
