@@ -3,10 +3,15 @@ import requests
 import random
 import os
 import threading
+from datetime import datetime, timezone, timedelta
+
 from dotenv import load_dotenv
 import google.generativeai as genai
 
 load_dotenv()
+
+# 한국 시간대 (UTC+9)
+KST = timezone(timedelta(hours=9))
 
 app = Flask(__name__)
 
@@ -28,13 +33,15 @@ if GEMINI_API_KEY:
         system_instruction="너는 SSAFY의 Mattermost 챗봇이야. 친절하지만 아주 짧고 명확하게 답변해. 한글 위주로 답변하고, 3문장 이내로 요약해줘."
     )
 
-# 점심 메뉴 리스트
-LUNCH_MENU = [
-    "🍜 라면", "🍕 피자", "🍔 햄버거", "🍱 도시락",
-    "🍛 카레", "🍝 스파게티", "🥗 샐러드", "🍗 치킨",
-    "🍣 초밥", "🥙 랩", "🌮 타코", "🍲 찌개",
-    "🥘 비빔밥", "🍜 우동", "🍖 갈비", "🥩 스테이크"
-]
+# 점심 메뉴 API 설정
+LUNCH_API_URL = "https://m.planeatchoice.net/v2/portal/dailyMenu"
+LUNCH_API_PARAMS = {
+    "listType": "card",
+    "busiCd": "RH3_K_001",
+    "compCd": "K_KR_011",
+    "storCd": "CAF38",
+    "mealCd": "2"
+}
 
 
 def send_mattermost_response(response_url, text):
@@ -78,7 +85,9 @@ def webhook():
     if command == '!번역':
         return handle_translate(data)
     elif command == '!점심':
-        return handle_lunch(data)
+        return handle_meal(data, '2', '점심')
+    elif command == '!저녁':
+        return handle_meal(data, '3', '저녁')
     elif command == '!주사위':
         return handle_dice(data)
     elif command == '!사다리':
@@ -242,11 +251,105 @@ def handle_translate(data):
     }), 200
 
 
-def handle_lunch(data):
-    """점심 메뉴 추천"""
-    menu = random.choice(LUNCH_MENU)
+def fetch_meal_menu(date_str=None, meal_cd='2'):
+    """외부 API에서 식단 메뉴 가져오기 (meal_cd: 2=점심, 3=저녁)"""
+    if not date_str:
+        date_str = datetime.now(KST).strftime('%Y-%m-%d')
+
+    url = f"https://m.planeatchoice.net/v2/portal/dailyMenu?listType=card&saleDt={date_str}&busiCd=RH3_K_001&compCd=K_KR_011&storCd=CAF38&mealCd={meal_cd}"
+
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        menus = []
+        for item in data.get('ds', []):
+            corner = item.get('cnrNm', '')
+            menu_name = item.get('itemNmDp', '')
+            calories = item.get('totCalorie', 0)
+            sold_out = item.get('soldOutYn', 'N') == 'Y'
+            image_url = None
+            if item.get('fileUpload'):
+                image_url = item['fileUpload'][0].get('url')
+
+            # 테이크아웃 이용안내 같은 항목 제외
+            if menu_name and '이용안내' not in menu_name:
+                menus.append({
+                    'corner': corner,
+                    'name': menu_name,
+                    'calories': calories,
+                    'sold_out': sold_out,
+                    'image': image_url
+                })
+
+        return menus
+    except Exception as e:
+        print(f"Error fetching meal menu: {e}")
+        return None
+
+
+def handle_meal(data, meal_cd, meal_name):
+    """식단 메뉴 조회 (점심/저녁 통합)"""
+    text = data.get('text', '').strip()
+    parts = text.split()
+
+    # 날짜 파싱 (MM-DD 또는 YYYY-MM-DD 형식)
+    date_str = None
+    if len(parts) > 1:
+        date_input = parts[1]
+        try:
+            if len(date_input) <= 5:  # MM-DD 형식
+                year = datetime.now(KST).year
+                date_str = f"{year}-{date_input}"
+            else:
+                date_str = date_input
+            # 날짜 형식 검증
+            datetime.strptime(date_str, '%Y-%m-%d')
+        except ValueError:
+            return jsonify({
+                "text": f"⚠️ 날짜 형식이 올바르지 않습니다.\n\n**사용법:** `!{meal_name}` 또는 `!{meal_name} 01-20`"
+            }), 200
+
+    menus = fetch_meal_menu(date_str, meal_cd)
+
+    if menus is None:
+        return jsonify({
+            "text": f"❌ {meal_name} 메뉴를 가져오는데 실패했습니다."
+        }), 200
+
+    if not menus:
+        display_date = date_str or datetime.now(KST).strftime('%Y-%m-%d')
+        return jsonify({
+            "text": f"📭 **{display_date}** {meal_name} 메뉴가 없습니다."
+        }), 200
+
+    # 메뉴 포맷팅
+    display_date = date_str or datetime.now(KST).strftime('%Y-%m-%d')
+    emoji = "🍽️" if meal_cd == '2' else "🌙"
+    menu_text = f"## {emoji} {display_date} {meal_name} 메뉴\n\n"
+    menu_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+
+    # 코너별로 그룹화
+    corners = {}
+    for menu in menus:
+        corner = menu['corner']
+        if corner not in corners:
+            corners[corner] = []
+        corners[corner].append(menu)
+
+    for corner, items in corners.items():
+        menu_text += f"### 📍 {corner}\n"
+        for item in items:
+            sold_out_mark = " ~~(품절)~~" if item['sold_out'] else ""
+            menu_text += f"- **{item['name']}**{sold_out_mark} ({item['calories']}kcal)\n"
+        menu_text += "\n"
+
+    menu_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    menu_text += f"💡 다른 날짜 조회: `!{meal_name} 01-20`"
+
     return jsonify({
-        "text": f"🍽️ **오늘의 점심 메뉴 추천**\n\n{menu}",
+        "text": menu_text,
         "response_type": "in_channel"
     }), 200
 
@@ -425,10 +528,11 @@ def handle_help(data):
 | `!코드 코드` | 코드 리뷰 & 점수 |
 | `!번역 텍스트` | 영↔한 번역 |
 
-### 🎮 재미 기능
+### 🍽️ 식단 & 재미
 | 명령어 | 설명 |
 |:------|:-----|
-| `!점심` | 오늘 뭐 먹지? 🍽️ |
+| `!점심` | 오늘 구미 식단 조회 |
+| `!점심 01-20` | 특정 날짜 식단 |
 | `!주사위 [N]` | N면 주사위 (기본 6) |
 | `!사다리 [이름들] [결과들]` | 사다리 타기 |
 
@@ -440,6 +544,7 @@ def handle_help(data):
 !요약 오늘 배운거: 리스트컴프리헨션, 제너레이터...
 !코드 def add(a,b): return a+b
 !번역 Hello World
+!점심 01-20
 !사다리 [철수,영희,민수] [당첨,꽝,꽝]
 ```
 
