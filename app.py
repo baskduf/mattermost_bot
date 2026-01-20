@@ -113,7 +113,9 @@ def webhook():
     elif command == '!취업':
         return handle_job(data)
     elif command == '!수업':
-        return handle_class(data)
+        return handle_class(data, today_only=True)
+    elif command == '!이번주수업':
+        return handle_class(data, today_only=False)
     elif command == '!help':
         return handle_help(data)
     elif text.startswith('?'):
@@ -691,7 +693,7 @@ def crawl_ssafy_curriculum():
             browser.close()
 
 
-def fetch_ssafy_curriculum():
+def fetch_ssafy_curriculum(today_only=False):
     """백그라운드에서 SSAFY 커리큘럼 크롤링 후 Incoming Webhook으로 전송"""
     try:
         curriculum = crawl_ssafy_curriculum()
@@ -700,7 +702,17 @@ def fetch_ssafy_curriculum():
             send_to_incoming_webhook("❌ 수업 정보를 가져오지 못했습니다.")
             return
 
-        class_text = "## 📚 이번 주 SSAFY 수업 일정\n\n"
+        # 오늘 수업만 필터링
+        if today_only:
+            curriculum = [day for day in curriculum if day.get('is_today')]
+            if not curriculum:
+                send_to_incoming_webhook("📭 오늘은 수업이 없습니다.")
+                return
+            title = "📚 오늘의 SSAFY 수업"
+        else:
+            title = "📚 이번 주 SSAFY 수업 일정"
+
+        class_text = f"## {title}\n\n"
         class_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
         for day in curriculum:
@@ -719,7 +731,8 @@ def fetch_ssafy_curriculum():
 
             class_text += "\n"
 
-        class_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        class_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        class_text += "💡 (교재링크는 수시로 변경되오니 재발급 해주세요)"
 
         send_to_incoming_webhook(class_text)
 
@@ -732,18 +745,19 @@ def fetch_ssafy_curriculum():
             send_to_incoming_webhook(f"❌ 수업 정보 크롤링 오류: {error_msg}")
 
 
-def handle_class(data):
+def handle_class(data, today_only=False):
     """SSAFY 수업 일정 조회 기능"""
     if not SSAFY_USER_ID or not SSAFY_USER_PW:
         return jsonify({
             "text": "❌ SSAFY 계정 정보가 설정되지 않았습니다."
         }), 200
 
-    thread = threading.Thread(target=fetch_ssafy_curriculum)
+    thread = threading.Thread(target=fetch_ssafy_curriculum, args=(today_only,))
     thread.start()
 
+    msg = "오늘 수업" if today_only else "이번 주 수업"
     return jsonify({
-        "text": "⏳ **SSAFY 수업 정보를 가져오는 중입니다...**\n\n로그인 및 크롤링에 시간이 걸릴 수 있습니다.",
+        "text": f"⏳ **SSAFY {msg} 정보를 가져오는 중입니다...**\n\n로그인 및 크롤링에 시간이 걸릴 수 있습니다.",
         "response_type": "in_channel"
     }), 200
 
@@ -823,7 +837,8 @@ def handle_help(data):
 ### 📚 SSAFY
 | 명령어 | 설명 |
 |:------|:-----|
-| `!수업` | 이번 주 수업 일정 조회 |
+| `!수업` | 오늘 수업 일정 조회 |
+| `!이번주수업` | 이번 주 전체 수업 조회 |
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -837,6 +852,7 @@ def handle_help(data):
 !사다리 [철수,영희,민수] [당첨,꽝,꽝]
 !취업
 !수업
+!이번주수업
 ```
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
