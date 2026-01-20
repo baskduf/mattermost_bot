@@ -14,6 +14,10 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 
+import re
+import time
+from playwright.sync_api import sync_playwright
+
 load_dotenv()
 
 # 한국 시간대 (UTC+9)
@@ -25,6 +29,10 @@ app = Flask(__name__)
 MATTERMOST_TOKEN = os.getenv('MATTERMOST_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')  # Gemini API 키
 MATTERMOST_INCOMING_WEBHOOK = os.getenv('MATTERMOST_INCOMING_WEBHOOK')
+
+# SSAFY 로그인 설정
+SSAFY_USER_ID = os.getenv('SSAFY_USER_ID')
+SSAFY_USER_PW = os.getenv('SSAFY_USER_PW')
 
 # Gemini AI 설정
 if GEMINI_API_KEY:
@@ -104,6 +112,8 @@ def webhook():
         return handle_code_review(data)
     elif command == '!취업':
         return handle_job(data)
+    elif command == '!수업':
+        return handle_class(data)
     elif command == '!help':
         return handle_help(data)
     elif text.startswith('?'):
@@ -581,6 +591,163 @@ def handle_job(data):
     }), 200
 
 
+def crawl_ssafy_curriculum():
+    """SSAFY에서 이번 주 커리큘럼 정보 크롤링 (Playwright 사용)"""
+    base_url = "https://edu.ssafy.com"
+    login_btn = "#wrap > div > div > div.section > form > div > div.field-set.log-in > div.form-btn > a"
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+
+        try:
+            # 1. 로그인
+            page.goto(f"{base_url}/comm/login/SecurityLoginForm.do")
+            page.fill("#userId", SSAFY_USER_ID)
+            page.fill("#userPwd", SSAFY_USER_PW)
+            page.click(login_btn)
+
+            # 2. 로딩 대기
+            page.wait_for_load_state("networkidle")
+            time.sleep(2)
+
+            # 3. 팝업 정리
+            for p_obj in context.pages[1:]:
+                p_obj.close()
+
+            # 4. 커리큘럼 추출
+            curriculum = []
+            selector = "ul.course > li"
+
+            try:
+                page.wait_for_selector(selector, timeout=10000)
+                day_elements = page.query_selector_all(selector)
+
+                for el in day_elements:
+                    day_info = {}
+
+                    # 날짜
+                    date_el = el.query_selector('span.date')
+                    if date_el:
+                        day_info['date'] = date_el.inner_text().strip()
+
+                    # 오늘 여부
+                    if 'today' in (el.get_attribute('class') or ''):
+                        day_info['is_today'] = True
+
+                    # 시간
+                    time_el = el.query_selector('dt')
+                    if time_el:
+                        day_info['time'] = time_el.inner_text().strip()
+
+                    # 카테고리
+                    cate_el = el.query_selector('span.cate')
+                    if cate_el:
+                        day_info['category'] = cate_el.inner_text().strip()
+
+                    # 과목명
+                    course_el = el.query_selector('span.course-name')
+                    if course_el:
+                        day_info['course'] = course_el.inner_text().strip()
+
+                    # 세부 주제
+                    subj_el = el.query_selector('span.subj')
+                    if subj_el:
+                        day_info['subject'] = subj_el.inner_text().strip()
+
+                    # 강사명
+                    name_el = el.query_selector('span.name')
+                    if name_el:
+                        day_info['instructor'] = name_el.inner_text().strip()
+
+                    # 강의실
+                    room_el = el.query_selector('span.class-room')
+                    if room_el:
+                        day_info['room'] = room_el.inner_text().strip()
+
+                    # 라이브/다시보기 URL
+                    live_el = el.query_selector('.liveDirect')
+                    if live_el:
+                        day_info['live_url'] = live_el.get_attribute('data-req')
+
+                    # 교재 ID
+                    matl_el = el.query_selector("[onclick*='fnMatlPopup']")
+                    if matl_el:
+                        onclick = matl_el.get_attribute('onclick')
+                        match = re.search(r"fnMatlPopup\('(\d+)'\)", onclick)
+                        if match:
+                            day_info['material_id'] = match.group(1)
+
+                    if day_info:
+                        curriculum.append(day_info)
+
+            except Exception as e:
+                print(f"커리큘럼 추출 중 오류: {e}")
+
+            return curriculum
+
+        finally:
+            browser.close()
+
+
+def fetch_ssafy_curriculum():
+    """백그라운드에서 SSAFY 커리큘럼 크롤링 후 Incoming Webhook으로 전송"""
+    try:
+        curriculum = crawl_ssafy_curriculum()
+
+        if not curriculum:
+            send_to_incoming_webhook("❌ 수업 정보를 가져오지 못했습니다.")
+            return
+
+        class_text = "## 📚 이번 주 SSAFY 수업 일정\n\n"
+        class_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+
+        for day in curriculum:
+            today_mark = " ⭐**오늘**" if day.get('is_today') else ""
+            class_text += f"### 📅 {day.get('date', '날짜없음')}{today_mark}\n"
+            class_text += f"- **시간:** {day.get('time', '-')}\n"
+            class_text += f"- **분류:** {day.get('category', '-')}\n"
+            class_text += f"- **과목:** {day.get('course', '-')} - {day.get('subject', '-')}\n"
+            class_text += f"- **강사:** {day.get('instructor', '-')} | **강의실:** {day.get('room', '-')}\n"
+
+            if day.get('live_url'):
+                class_text += f"- 🎬 [다시보기]({day['live_url']})\n"
+            if day.get('material_id'):
+                material_url = f"https://edu.ssafy.com/edu/lectureroom/openlearning/mainMatlPopup.do?clssAcctoTmtbSeq={day['material_id']}"
+                class_text += f"- 📖 [교재]({material_url})\n"
+
+            class_text += "\n"
+
+        class_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        send_to_incoming_webhook(class_text)
+
+    except Exception as e:
+        error_msg = str(e)
+        print(f"SSAFY crawling error: {error_msg}")
+        if "playwright" in error_msg.lower():
+            send_to_incoming_webhook("❌ 서버에 Playwright가 설치되어 있지 않습니다. 관리자에게 문의하세요.")
+        else:
+            send_to_incoming_webhook(f"❌ 수업 정보 크롤링 오류: {error_msg}")
+
+
+def handle_class(data):
+    """SSAFY 수업 일정 조회 기능"""
+    if not SSAFY_USER_ID or not SSAFY_USER_PW:
+        return jsonify({
+            "text": "❌ SSAFY 계정 정보가 설정되지 않았습니다."
+        }), 200
+
+    thread = threading.Thread(target=fetch_ssafy_curriculum)
+    thread.start()
+
+    return jsonify({
+        "text": "⏳ **SSAFY 수업 정보를 가져오는 중입니다...**\n\n로그인 및 크롤링에 시간이 걸릴 수 있습니다.",
+        "response_type": "in_channel"
+    }), 200
+
+
 def generate_gemini_response(question):
     """백그라운드에서 Gemini 응답 생성 후 Incoming Webhook으로 전송"""
     try:
@@ -653,6 +820,11 @@ def handle_help(data):
 |:------|:-----|
 | `!취업` | IT/인터넷 인턴 채용 정보 |
 
+### 📚 SSAFY
+| 명령어 | 설명 |
+|:------|:-----|
+| `!수업` | 이번 주 수업 일정 조회 |
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ### 📌 사용 예시
@@ -664,6 +836,7 @@ def handle_help(data):
 !점심 01-20
 !사다리 [철수,영희,민수] [당첨,꽝,꽝]
 !취업
+!수업
 ```
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
