@@ -1,68 +1,73 @@
-# Mattermost Bot (Flask)
+# SSAFY Mattermost Bot
 
-Mattermost의 Outgoing Webhook을 사용한 Flask 기반 봇 애플리케이션입니다.
+SSAFY 교육생을 위한 Mattermost 챗봇입니다. AI 질문, 식단 조회, 수업 일정, 취업 정보 등 다양한 기능을 제공합니다.
 
-## 기능
+## 주요 기능
 
-이 봇은 다음과 같은 기능을 제공합니다:
+### AI 기능
+| 명령어 | 설명 |
+|:------|:-----|
+| `?질문` | Gemini AI에게 질문하기 |
+| `!요약 [내용]` | 강의/메모 내용 정리 |
+| `!코드 [코드]` | 코드 리뷰 & 100점 만점 점수 |
+| `!번역 [텍스트]` | 영어↔한국어 번역 |
 
-- **!날씨 [도시명]** - 특정 도시의 날씨 정보 조회
-- **!번역 [텍스트]** - 텍스트 번역 (API 연동 필요)
-- **!점심** - 랜덤 점심 메뉴 추천
-- **!주사위 [면 수]** - 주사위 굴리기 (기본 6면)
-- **!gif [검색어]** - GIF 이미지 검색
-- **?[질문내용]** - Gemini AI에게 질문하기
-- **!help** - 도움말 표시
+### 식단 조회
+| 명령어 | 설명 |
+|:------|:-----|
+| `!점심` | 오늘 구미캠퍼스 점심 메뉴 |
+| `!점심 01-20` | 특정 날짜 점심 메뉴 |
+| `!저녁` | 오늘 구미캠퍼스 저녁 메뉴 |
+| `!저녁 01-20` | 특정 날짜 저녁 메뉴 |
+
+### SSAFY 수업 일정
+| 명령어 | 설명 |
+|:------|:-----|
+| `!수업` | 오늘 수업 일정 조회 |
+| `!이번주수업` | 이번 주 전체 수업 조회 |
+
+### 취업 정보
+| 명령어 | 설명 |
+|:------|:-----|
+| `!취업` | IT/인터넷 인턴 채용 정보 (링커리어) |
+
+### 재미 기능
+| 명령어 | 설명 |
+|:------|:-----|
+| `!주사위 [N]` | N면 주사위 굴리기 (기본 6면) |
+| `!사다리 [이름들] [결과들]` | 사다리 타기 |
+| `!help` | 도움말 표시 |
 
 ## 설치 방법
 
 ### 1. 필수 요구사항
 
-- Python 3.8 이상
+- Python 3.11 이상
 - pip
 
 ### 2. 패키지 설치
 
 ```bash
-cd mattermost_bot
 pip install -r requirements.txt
+playwright install chromium
 ```
 
 ### 3. 환경 변수 설정
 
-프로젝트 루트 디렉토리에 `.env` 파일을 생성하고 다음 내용을 추가합니다:
+`.env.example`을 참고하여 `.env` 파일을 생성합니다:
 
 ```env
-# Mattermost 토큰
+# Mattermost 설정
 MATTERMOST_TOKEN=your_mattermost_token_here
+MATTERMOST_INCOMING_WEBHOOK=https://your-mattermost-server/hooks/your_webhook_id
 
-# OpenWeatherMap API 키 (날씨 기능용)
-WEATHER_API_KEY=your_openweathermap_api_key
+# Google Gemini API 키
+GEMINI_API_KEY=your_gemini_api_key_here
 
-# Giphy API 키 (GIF 검색용)
-GIPHY_API_KEY=your_giphy_api_key
-
-# Google Gemini API 키 (AI 챗봇용)
-GEMINI_API_KEY=your_gemini_api_key
+# SSAFY 계정 정보 (수업 일정 조회용)
+SSAFY_USER_ID=your_email@example.com
+SSAFY_USER_PW=your_password
 ```
-
-#### API 키 발급 방법
-
-**OpenWeatherMap API**
-1. [OpenWeatherMap](https://openweathermap.org/api) 접속
-2. 회원 가입 후 API 키 발급
-3. `.env` 파일의 `WEATHER_API_KEY`에 입력
-
-**Giphy API**
-1. [Giphy Developers](https://developers.giphy.com/) 접속
-2. 앱 생성 후 API 키 발급
-3. `.env` 파일의 `GIPHY_API_KEY`에 입력
-
-**Google Gemini API**
-1. [Google AI Studio](https://makersuite.google.com/app/apikey) 접속
-2. Google 계정으로 로그인
-3. "Get API key" 버튼 클릭하여 API 키 생성
-4. `.env` 파일의 `GEMINI_API_KEY`에 입력
 
 ### 4. 애플리케이션 실행
 
@@ -74,79 +79,88 @@ python app.py
 
 ## Mattermost 설정
 
-### 1. Outgoing Webhook 생성
+### Outgoing Webhook 생성
 
-1. Mattermost에 로그인
-2. 설정 > 통합 > Outgoing Webhooks
-3. 새 Outgoing Webhook 추가
-4. 다음 정보 입력:
-   - **트리거 단어**: !날씨, !번역, !점심, !주사위, !gif, !help
-   - **트리거 조건**: 첫 번째 단어가 트리거 단어와 정확히 일치할 때
-   - **콜백 URL**: `http://localhost:5000/webhook` (또는 공개 서버 URL)
-   - **Content-Type**: application/x-www-form-urlencoded
+1. Mattermost 시스템 콘솔 > 통합 > Outgoing Webhooks
+2. 새 Outgoing Webhook 추가:
+   - **트리거 단어**: `!번역`, `!점심`, `!저녁`, `!주사위`, `!사다리`, `!요약`, `!코드`, `!취업`, `!수업`, `!이번주수업`, `!help`, `?`
+   - **콜백 URL**: `http://your-server/webhook`
 
-### 2. 공개 URL 설정 (선택사항)
+### Incoming Webhook 생성
 
-로컬 개발 환경에서 Mattermost와 연동하려면 ngrok 같은 터널링 서비스를 사용할 수 있습니다:
+AI 기능 등 비동기 응답을 위해 Incoming Webhook이 필요합니다:
+
+1. Mattermost 시스템 콘솔 > 통합 > Incoming Webhooks
+2. 새 Incoming Webhook 추가
+3. 생성된 URL을 `.env`의 `MATTERMOST_INCOMING_WEBHOOK`에 설정
+
+## AWS Elastic Beanstalk 배포
+
+### 배포 명령어
 
 ```bash
-# ngrok 설치 후
-ngrok http 5000
+eb deploy
 ```
 
-생성된 공개 URL을 Mattermost의 콜백 URL에 입력합니다.
+### 환경 변수 설정
 
-## 사용 예시
-
-Mattermost 채널에서 다음과 같이 명령어를 입력합니다:
-
+```bash
+eb setenv MATTERMOST_TOKEN=xxx MATTERMOST_INCOMING_WEBHOOK=xxx GEMINI_API_KEY=xxx SSAFY_USER_ID=xxx SSAFY_USER_PW=xxx
 ```
-!날씨 서울
-!점심
-!주사위 20
-!gif 고양이
-?파이썬에서 리스트와 튜플의 차이는?
-!help
-```
+
+### 배포 구성 파일
+
+- `.ebextensions/` - Chrome, Playwright 의존성 설치
+- `.platform/hooks/postdeploy/` - Playwright 브라우저 설치
 
 ## 프로젝트 구조
 
 ```
 mattermost_bot/
-├── app.py              # 메인 Flask 애플리케이션
-├── requirements.txt    # Python 패키지 의존성
-├── .env               # 환경 변수 (직접 생성)
-└── README.md          # 프로젝트 문서
+├── app.py                          # 메인 Flask 애플리케이션
+├── requirements.txt                # Python 패키지 의존성
+├── .env                            # 환경 변수 (직접 생성)
+├── .env.example                    # 환경 변수 예시
+├── .ebextensions/                  # AWS EB 설정
+│   ├── 01_flask.config
+│   ├── 04_chrome.config
+│   └── 05_playwright.config
+├── .platform/
+│   └── hooks/postdeploy/
+│       └── 01_install_playwright.sh
+└── README.md
 ```
 
 ## API 엔드포인트
 
-- `POST /webhook` - Mattermost Outgoing Webhook 수신
-- `GET /health` - 헬스 체크
+| 엔드포인트 | 메서드 | 설명 |
+|:----------|:------|:-----|
+| `/webhook` | POST | Mattermost Outgoing Webhook 수신 |
+| `/health` | GET | 헬스 체크 |
+
+## 기술 스택
+
+- **Backend**: Flask 3.0
+- **AI**: Google Gemini API (gemini-2.5-flash-lite)
+- **크롤링**:
+  - Selenium + Chrome (취업 정보)
+  - Playwright + Chromium (SSAFY 수업 일정)
+- **배포**: AWS Elastic Beanstalk (Amazon Linux 2023)
 
 ## 문제 해결
 
-### 봇이 응답하지 않는 경우
+### AI 기능 응답이 없는 경우
+- Gemini API 키 확인
+- Incoming Webhook URL 확인
+- 요청 제한(429 에러)일 수 있음 - 1분 후 재시도
 
-1. Flask 서버가 실행 중인지 확인
-2. Mattermost의 토큰이 올바른지 확인
-3. 콜백 URL이 정확한지 확인
-4. 트리거 단어가 정확히 일치하는지 확인
+### 수업 조회가 안 되는 경우
+- SSAFY 계정 정보 확인
+- Playwright 브라우저 설치 여부 확인
 
-### 날씨/GIF/Gemini 기능이 작동하지 않는 경우
-
-1. `.env` 파일에 API 키가 올바르게 설정되었는지 확인
-2. API 키의 유효성 확인
-3. 인터넷 연결 상태 확인
-
-### Gemini AI 응답이 느린 경우
-
-Gemini AI는 외부 API를 호출하므로 응답 시간이 몇 초 소요될 수 있습니다. 이는 정상적인 동작입니다.
+### 취업 정보 조회가 안 되는 경우
+- Chrome/ChromeDriver 설치 여부 확인
 
 ## 라이선스
 
 MIT License
-
-## 기여
-
-버그 리포트나 기능 제안은 이슈로 등록해주세요.
