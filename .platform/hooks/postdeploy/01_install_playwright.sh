@@ -26,12 +26,12 @@ sudo dnf install -y \
     dbus-libs \
     || true
 
-echo "Installing Playwright browsers..."
+echo "Installing Playwright browsers as webapp user..."
 
-# Activate virtual environment
+# Activate virtual environment and install as webapp user
 source /var/app/venv/*/bin/activate
 
-# Install Playwright browsers (without --with-deps since we installed manually)
-playwright install chromium || true
+# Install Playwright browsers as webapp user (the user that runs the app)
+sudo -u webapp bash -c "source /var/app/venv/*/bin/activate && playwright install chromium" || true
 
 echo "Playwright installation complete!"
