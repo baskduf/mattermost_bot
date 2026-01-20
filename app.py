@@ -8,6 +8,12 @@ from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 import google.generativeai as genai
 
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
+
 load_dotenv()
 
 # 한국 시간대 (UTC+9)
@@ -96,6 +102,8 @@ def webhook():
         return handle_summary(data)
     elif command == '!코드':
         return handle_code_review(data)
+    elif command == '!취업':
+        return handle_job(data)
     elif command == '!help':
         return handle_help(data)
     elif text.startswith('?'):
@@ -469,6 +477,110 @@ def send_to_incoming_webhook(text):
         print(f"Error sending to incoming webhook: {e}")
 
 
+def crawl_linkareer_jobs():
+    """링커리어에서 IT/인터넷 인턴 채용 정보 크롤링"""
+    chrome_options = Options()
+    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--disable-images")
+    chrome_options.add_argument("--blink-settings=imagesEnabled=false")
+    chrome_options.add_experimental_option("prefs", {"profile.managed_default_content_settings.images": 2})
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    chrome_options.page_load_strategy = 'eager'
+
+    driver = webdriver.Chrome(options=chrome_options)
+
+    try:
+        url = "https://linkareer.com/list/intern?filterBy_activityTypeID=5&filterBy_categoryIDs=58&filterBy_jobTypes=INTERN&filterBy_status=OPEN&orderBy_direction=DESC&orderBy_field=RECENT&page=1"
+        driver.get(url)
+
+        wait = WebDriverWait(driver, 20)
+        # 채용 링크가 최소 1개 이상 나타날 때까지 대기
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "a.recruit-link")))
+        # 추가 로딩을 위해 잠시 대기
+        import time
+        time.sleep(2)
+
+        links = driver.find_elements(By.CSS_SELECTOR, "a.recruit-link")
+        if not links:
+            links = driver.find_elements(By.CSS_SELECTOR, "a[href*='/activity/']")
+
+        results = []
+        for link in links:
+            try:
+                href = link.get_attribute("href")
+                text = link.text.strip()
+
+                if not href or "/activity/" not in href:
+                    continue
+
+                lines = text.split('\n')
+                title = lines[0] if lines else "제목 없음"
+                category = lines[1] if len(lines) > 1 else ""
+
+                results.append({
+                    "title": title,
+                    "category": category,
+                    "link": href
+                })
+
+                if len(results) >= 10:
+                    break
+            except Exception:
+                continue
+
+        return results
+
+    finally:
+        driver.quit()
+
+
+def fetch_job_info():
+    """백그라운드에서 채용 정보 크롤링 후 Incoming Webhook으로 전송"""
+    try:
+        results = crawl_linkareer_jobs()
+
+        if not results:
+            send_to_incoming_webhook("❌ 채용 정보를 가져오지 못했습니다.")
+            return
+
+        job_text = "## 💼 IT/인터넷 인턴 채용 정보\n\n"
+        job_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+
+        for i, item in enumerate(results, 1):
+            job_text += f"**{i}. [{item['title']}]({item['link']})**\n"
+            if item['category']:
+                job_text += f"   📂 {item['category']}\n"
+            job_text += "\n"
+
+        job_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        job_text += f"🔗 [링커리어에서 더보기](https://linkareer.com/list/intern?filterBy_categoryIDs=58&filterBy_status=OPEN)"
+
+        send_to_incoming_webhook(job_text)
+
+    except Exception as e:
+        error_msg = str(e)
+        print(f"Job crawling error: {error_msg}")
+        if "Chrome" in error_msg or "chromedriver" in error_msg.lower():
+            send_to_incoming_webhook("❌ 서버에 Chrome이 설치되어 있지 않습니다. 관리자에게 문의하세요.")
+        else:
+            send_to_incoming_webhook(f"❌ 채용 정보 크롤링 오류: {error_msg}")
+
+
+def handle_job(data):
+    """취업 정보 조회 기능"""
+    thread = threading.Thread(target=fetch_job_info)
+    thread.start()
+
+    return jsonify({
+        "text": "⏳ **IT/인터넷 인턴 채용 정보를 가져오는 중입니다...**\n\n크롤링에 시간이 걸릴 수 있습니다.",
+        "response_type": "in_channel"
+    }), 200
+
+
 def generate_gemini_response(question):
     """백그라운드에서 Gemini 응답 생성 후 Incoming Webhook으로 전송"""
     try:
@@ -536,6 +648,11 @@ def handle_help(data):
 | `!주사위 [N]` | N면 주사위 (기본 6) |
 | `!사다리 [이름들] [결과들]` | 사다리 타기 |
 
+### 💼 취업 정보
+| 명령어 | 설명 |
+|:------|:-----|
+| `!취업` | IT/인터넷 인턴 채용 정보 |
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ### 📌 사용 예시
@@ -546,6 +663,7 @@ def handle_help(data):
 !번역 Hello World
 !점심 01-20
 !사다리 [철수,영희,민수] [당첨,꽝,꽝]
+!취업
 ```
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
