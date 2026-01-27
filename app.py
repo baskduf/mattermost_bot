@@ -293,7 +293,7 @@ def fetch_meal_menu(date_str=None, meal_cd='2'):
             # 이미지 URL (숨김 플래그 확인)
             image_url = None
             if item.get('hidePictureYn', 'N') != 'Y' and item.get('fileUpload'):
-                image_url = item['fileUpload'][0].get('url')
+                image_url = item['fileUpload'][0].get('url', '').replace('http://planeatchoice.net/', 'https://m.planeatchoice.net/')
 
             # 반찬 목록 (숨김 플래그 확인)
             side_dishes = []
