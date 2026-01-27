@@ -370,6 +370,7 @@ def handle_meal(data, meal_cd, meal_name):
             corners[corner] = []
         corners[corner].append(menu)
 
+    attachments = []
     for corner, items in corners.items():
         menu_text += f"### 📍 {corner}\n"
         for item in items:
@@ -379,18 +380,25 @@ def handle_meal(data, meal_cd, meal_name):
             if item.get('side_dishes'):
                 side_names = ', '.join(sub['name'] for sub in item['side_dishes'])
                 menu_text += f"  - 반찬: {side_names}\n"
-            # 메뉴 이미지
+            # 이미지를 attachment로 추가
             if item.get('image'):
-                menu_text += f"  - ![{item['name']}]({item['image']})\n"
+                attachments.append({
+                    "title": f"{corner} - {item['name']}",
+                    "image_url": item['image']
+                })
         menu_text += "\n"
 
     menu_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
     menu_text += f"💡 다른 날짜 조회: `!{meal_name} 01-20`"
 
-    return jsonify({
+    response = {
         "text": menu_text,
         "response_type": "in_channel"
-    }), 200
+    }
+    if attachments:
+        response["attachments"] = attachments
+
+    return jsonify(response), 200
 
 
 def handle_dice(data):
