@@ -359,8 +359,7 @@ def handle_meal(data, meal_cd, meal_name):
     # 메뉴 포맷팅
     display_date = date_str or datetime.now(KST).strftime('%Y-%m-%d')
     emoji = "🍽️" if meal_cd == '2' else "🌙"
-    menu_text = f"## {emoji} {display_date} {meal_name} 메뉴\n\n"
-    menu_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    header = f"## {emoji} {display_date} {meal_name} 메뉴"
 
     # 코너별로 그룹화
     corners = {}
@@ -372,33 +371,30 @@ def handle_meal(data, meal_cd, meal_name):
 
     attachments = []
     for corner, items in corners.items():
-        menu_text += f"### 📍 {corner}\n"
         for item in items:
             sold_out_mark = " ~~(품절)~~" if item['sold_out'] else ""
-            menu_text += f"- **{item['name']}**{sold_out_mark} ({item['calories']}kcal)\n"
-            # 반찬 목록
+            text = f"**{item['name']}**{sold_out_mark} ({item['calories']}kcal)"
             if item.get('side_dishes'):
                 side_names = ', '.join(sub['name'] for sub in item['side_dishes'])
-                menu_text += f"  - 반찬: {side_names}\n"
-            # 이미지를 attachment로 추가
+                text += f"\n반찬: {side_names}"
+
+            attachment = {
+                "title": f"📍 {corner}",
+                "text": text
+            }
             if item.get('image'):
-                attachments.append({
-                    "title": f"{corner} - {item['name']}",
-                    "image_url": item['image']
-                })
-        menu_text += "\n"
+                attachment["image_url"] = item['image']
+            attachments.append(attachment)
 
-    menu_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-    menu_text += f"💡 다른 날짜 조회: `!{meal_name} 01-20`"
+    attachments.append({
+        "text": f"💡 다른 날짜 조회: `!{meal_name} 01-20`"
+    })
 
-    response = {
-        "text": menu_text,
+    return jsonify({
+        "text": header,
+        "attachments": attachments,
         "response_type": "in_channel"
-    }
-    if attachments:
-        response["attachments"] = attachments
-
-    return jsonify(response), 200
+    }), 200
 
 
 def handle_dice(data):
