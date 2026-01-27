@@ -289,9 +289,20 @@ def fetch_meal_menu(date_str=None, meal_cd='2'):
             menu_name = item.get('itemNmDp', '')
             calories = item.get('totCalorie', 0)
             sold_out = item.get('soldOutYn', 'N') == 'Y'
+
+            # 이미지 URL (숨김 플래그 확인)
             image_url = None
-            if item.get('fileUpload'):
+            if item.get('hidePictureYn', 'N') != 'Y' and item.get('fileUpload'):
                 image_url = item['fileUpload'][0].get('url')
+
+            # 반찬 목록 (숨김 플래그 확인)
+            side_dishes = []
+            if item.get('hideSubMenuYn', 'N') != 'Y':
+                for sub in item.get('dailySubMenuDtos', []):
+                    side_dishes.append({
+                        'name': sub.get('subItemNmDp', ''),
+                        'calories': sub.get('calorie', 0)
+                    })
 
             # 테이크아웃 이용안내 같은 항목 제외
             if menu_name and '이용안내' not in menu_name:
@@ -300,7 +311,8 @@ def fetch_meal_menu(date_str=None, meal_cd='2'):
                     'name': menu_name,
                     'calories': calories,
                     'sold_out': sold_out,
-                    'image': image_url
+                    'image': image_url,
+                    'side_dishes': side_dishes
                 })
 
         return menus
@@ -363,6 +375,13 @@ def handle_meal(data, meal_cd, meal_name):
         for item in items:
             sold_out_mark = " ~~(품절)~~" if item['sold_out'] else ""
             menu_text += f"- **{item['name']}**{sold_out_mark} ({item['calories']}kcal)\n"
+            # 반찬 목록
+            if item.get('side_dishes'):
+                side_names = ', '.join(sub['name'] for sub in item['side_dishes'])
+                menu_text += f"  - 반찬: {side_names}\n"
+            # 메뉴 이미지
+            if item.get('image'):
+                menu_text += f"  - ![{item['name']}]({item['image']})\n"
         menu_text += "\n"
 
     menu_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
